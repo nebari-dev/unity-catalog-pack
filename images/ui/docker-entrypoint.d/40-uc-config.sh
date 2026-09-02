@@ -23,14 +23,28 @@ fi
 
 esc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
+# The upstream chart exports every REACT_APP_*_CLIENT_ID from the same Secret
+# whenever auth is enabled, so only honour the legacy variable that matches the
+# selected provider. Explicit UC_UI_* values always win.
+oidc_client_id="${UC_UI_OIDC_CLIENT_ID:-}"
+google_client_id="${UC_UI_GOOGLE_CLIENT_ID:-}"
+okta_domain="${UC_UI_OKTA_DOMAIN:-}"
+okta_client_id="${UC_UI_OKTA_CLIENT_ID:-}"
+case "$provider" in
+  keycloak) oidc_client_id="${oidc_client_id:-${REACT_APP_KEYCLOAK_CLIENT_ID:-}}" ;;
+  google)   google_client_id="${google_client_id:-${REACT_APP_GOOGLE_CLIENT_ID:-}}" ;;
+  okta)     okta_domain="${okta_domain:-${REACT_APP_OKTA_DOMAIN:-}}"
+            okta_client_id="${okta_client_id:-${REACT_APP_OKTA_CLIENT_ID:-}}" ;;
+esac
+
 cat > /usr/share/nginx/html/config.js <<CONF
 window.__UC_CONFIG__ = {
   "authProvider": "$(esc "$provider")",
   "oidcIssuer": "$(esc "$issuer")",
-  "oidcClientId": "$(esc "${UC_UI_OIDC_CLIENT_ID:-${REACT_APP_KEYCLOAK_CLIENT_ID:-}}")",
-  "googleClientId": "$(esc "${UC_UI_GOOGLE_CLIENT_ID:-${REACT_APP_GOOGLE_CLIENT_ID:-}}")",
-  "oktaDomain": "$(esc "${UC_UI_OKTA_DOMAIN:-${REACT_APP_OKTA_DOMAIN:-}}")",
-  "oktaClientId": "$(esc "${UC_UI_OKTA_CLIENT_ID:-${REACT_APP_OKTA_CLIENT_ID:-}}")"
+  "oidcClientId": "$(esc "$oidc_client_id")",
+  "googleClientId": "$(esc "$google_client_id")",
+  "oktaDomain": "$(esc "$okta_domain")",
+  "oktaClientId": "$(esc "$okta_client_id")"
 };
 CONF
 echo "uc-ui: auth provider '$provider', issuer '$issuer'"
