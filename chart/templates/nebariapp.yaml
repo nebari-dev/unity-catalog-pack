@@ -1,0 +1,30 @@
+{{- if .Values.nebariapp.enabled }}
+{{- if not .Values.nebariapp.hostname }}
+{{- fail "nebariapp.hostname is required when nebariapp.enabled is true" }}
+{{- end }}
+apiVersion: reconcilers.nebari.dev/v1
+kind: NebariApp
+metadata:
+  name: {{ include "nebari-unity-catalog.ucFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nebari-unity-catalog.labels" . | nindent 4 }}
+spec:
+  hostname: {{ .Values.nebariapp.hostname | quote }}
+  service:
+    name: {{ include "nebari-unity-catalog.uiServiceName" . }}
+    port: {{ .Values.nebariapp.service.port }}
+  {{- with .Values.nebariapp.routing }}
+  routing:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.nebariapp.auth }}
+  auth:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.nebariapp.landingPage }}
+  landingPage:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  gateway: {{ .Values.nebariapp.gateway | default "public" }}
+{{- end }}
