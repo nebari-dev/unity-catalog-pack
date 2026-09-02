@@ -1,0 +1,103 @@
+# ArgoCD Application for Unity Catalog on a Nebari cluster.
+# Requires: Secret unity-catalog-sync-keycloak in namespace unity-catalog
+# (see docs/keycloak-service-account.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: unity-catalog
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/nebari-dev/unity-catalog-pack
+    targetRevision: main
+    path: chart
+    helm:
+      values: |
+        nebariapp:
+          enabled: true
+          hostname: uc.nebari.example.com   # CHANGE ME
+          auth:
+            enabled: true
+            provider: keycloak
+            provisionClient: true
+            enforceAtGateway: false
+            spaClient:
+              enabled: true
+          landingPage:
+            enabled: true
+            displayName: Unity Catalog
+            category: Data Science
+        database:
+          cnpg:
+            enabled: true
+        sync:
+          enabled: true
+          keycloak:
+            existingSecret: unity-catalog-sync-keycloak
+          groups:
+            - name: uc-admins
+              privileges: ["CREATE CATALOG"]
+            - name: uc-users
+              privileges: []
+        unitycatalog:
+          auth:
+            enabled: true
+            provider: keycloak
+            clientSecretName: unity-catalog-oidc-client
+            clientSecretKeys:
+              clientId: client-id
+              clientSecret: client-secret
+            spaClientIdKey: spa-client-id
+            authorizationUrl: ${OAUTH_ISSUER_URL}/protocol/openid-connect/auth
+            tokenUrl: ${OAUTH_ISSUER_URL}/protocol/openid-connect/token
+            allowedIssuers: ${OAUTH_ISSUER_URL}
+            audiences: ${OAUTH_SPA_CLIENT_ID},${OAUTH_CLIENT_ID}
+          server:
+            db:
+              type: postgresql
+            config:
+              extraProperties:
+                server.authorization.policy-refresh: "true"
+            deployment:
+              initContainer:
+                extraEnv:
+                  - name: OAUTH_ISSUER_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: unity-catalog-oidc-client
+                        key: issuer-url
+                  - name: OAUTH_SPA_CLIENT_ID
+                    valueFrom:
+                      secretKeyRef:
+                        name: unity-catalog-oidc-client
+                        key: spa-client-id
+          ui:
+            deployment:
+              extraEnv:
+                - name: UC_UI_AUTH_PROVIDER
+                  value: keycloak
+                - name: UC_UI_OIDC_ISSUER
+                  valueFrom:
+                    secretKeyRef:
+                      name: unity-catalog-oidc-client
+                      key: issuer-url
+                - name: UC_UI_OIDC_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: unity-catalog-oidc-client
+                      key: spa-client-id
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: unity-catalog
+  syncPolicy:
+    managedNamespaceMetadata:
+      labels:
+        nebari.dev/managed: "true"
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

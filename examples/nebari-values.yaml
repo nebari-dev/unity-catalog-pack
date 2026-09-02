@@ -1,0 +1,111 @@
+# Nebari profile: NebariApp routing + TLS, Keycloak clients provisioned by the
+# nebari-operator, Unity Catalog authorization enabled, CloudNativePG database,
+# Keycloak group sync. Edit the values marked CHANGE ME.
+#
+# Prerequisites:
+#   kubectl label namespace unity-catalog nebari.dev/managed=true --overwrite
+#   Secret unity-catalog-sync-keycloak with keys client-id / client-secret
+#   (see docs/keycloak-service-account.md)
+
+nebariapp:
+  enabled: true
+  hostname: uc.nebari.example.com   # CHANGE ME
+  routing:
+    tls:
+      enabled: true
+    routes:
+      - pathPrefix: /
+        pathType: PathPrefix
+  auth:
+    enabled: true
+    provider: keycloak
+    provisionClient: true
+    enforceAtGateway: false
+    spaClient:
+      enabled: true
+    scopes:
+      - openid
+      - profile
+      - email
+  landingPage:
+    enabled: true
+    displayName: Unity Catalog
+    description: Data and AI catalog with credential vending
+    category: Data Science
+    priority: 20
+
+database:
+  cnpg:
+    enabled: true
+    storage:
+      size: 10Gi
+
+sync:
+  enabled: true
+  keycloak:
+    existingSecret: unity-catalog-sync-keycloak
+  groups:                                   # CHANGE ME: Keycloak groups to mirror into Unity Catalog
+    - name: uc-admins
+      privileges: ["CREATE CATALOG"]
+    - name: uc-users
+      privileges: []
+  deactivateRemoved: true
+
+unitycatalog:
+  auth:
+    enabled: true
+    provider: keycloak
+    # Operator-managed Secret (created by the NebariApp above).
+    clientSecretName: unity-catalog-oidc-client
+    clientSecretKeys:
+      clientId: client-id
+      clientSecret: client-secret
+    spaClientIdKey: spa-client-id
+    # ${VAR} placeholders resolve at pod start from the init container env below.
+    authorizationUrl: ${OAUTH_ISSUER_URL}/protocol/openid-connect/auth
+    tokenUrl: ${OAUTH_ISSUER_URL}/protocol/openid-connect/token
+    allowedIssuers: ${OAUTH_ISSUER_URL}
+    audiences: ${OAUTH_SPA_CLIENT_ID},${OAUTH_CLIENT_ID}
+    accessTokenTimeout: PT24H
+  server:
+    db:
+      type: postgresql
+    config:
+      extraProperties:
+        server.authorization.policy-refresh: "true"
+    deployment:
+      initContainer:
+        extraEnv:
+          - name: OAUTH_ISSUER_URL
+            valueFrom:
+              secretKeyRef:
+                name: unity-catalog-oidc-client
+                key: issuer-url
+          - name: OAUTH_SPA_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: unity-catalog-oidc-client
+                key: spa-client-id
+  ui:
+    deployment:
+      extraEnv:
+        - name: UC_UI_AUTH_PROVIDER
+          value: keycloak
+        - name: UC_UI_OIDC_ISSUER
+          valueFrom:
+            secretKeyRef:
+              name: unity-catalog-oidc-client
+              key: issuer-url
+        - name: UC_UI_OIDC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: unity-catalog-oidc-client
+              key: spa-client-id
+  # Object storage credentials for credential vending (see upstream values.yaml):
+  # storage:
+  #   credentials:
+  #     s3:
+  #       - bucketPath: s3://my-bucket
+  #         region: us-east-1
+  #         awsRoleArn: arn:aws:iam::123456789012:role/unity-catalog
+  #         credentialsSecretName: unity-catalog-s3   # keys accessKey, secretKey

@@ -1,0 +1,20 @@
+# Standalone (non-Nebari) profile: H2 file database on a PVC, no authentication.
+#   helm upgrade --install unity-catalog chart/ -f examples/standalone-values.yaml -n unity-catalog --create-namespace
+#   kubectl port-forward svc/unity-catalog-ui 3000:3000 -n unity-catalog
+nebariapp:
+  enabled: false
+database:
+  cnpg:
+    enabled: false
+sync:
+  enabled: false
+unitycatalog:
+  auth:
+    enabled: false
+  server:
+    db:
+      type: file
+      fileConfig:
+        persistence:
+          enabled: true
+          size: 1Gi
