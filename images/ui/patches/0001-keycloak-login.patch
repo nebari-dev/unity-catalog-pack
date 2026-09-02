@@ -1,0 +1,352 @@
+diff --git a/package.json b/package.json
+index 265f8eb..6264e77 100644
+--- a/package.json
++++ b/package.json
+@@ -13,6 +13,7 @@
+     "@testing-library/user-event": "13.2.1",
+     "antd": "5.19.1",
+     "axios": "1.7.4",
++    "oidc-client-ts": "^3.1.0",
+     "react": "18.3.1",
+     "react-dom": "18.3.1",
+     "react-router-dom": "6.24.1",
+diff --git a/public/config.js b/public/config.js
+new file mode 100644
+index 0000000..399e195
+--- /dev/null
++++ b/public/config.js
+@@ -0,0 +1,2 @@
++// Overwritten at container start by docker-entrypoint.d/40-uc-config.sh.
++window.__UC_CONFIG__ = {};
+diff --git a/public/index.html b/public/index.html
+index 0612093..d493841 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -23,6 +23,7 @@
+       work correctly both with client-side routing and a non-root public URL.
+       Learn how to configure a non-root public URL by running `npm run build`.
+     -->
++    <script src="%PUBLIC_URL%/config.js"></script>
+     <title>Unity Catalog</title>
+   </head>
+   <body>
+diff --git a/src/App.tsx b/src/App.tsx
+index 1a21173..7bdee3a 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -30,14 +30,16 @@ import Login from './pages/Login';
+ import { AuthProvider, useAuth } from './context/auth-context';
+ import { UserOutlined } from '@ant-design/icons';
+ import ModelVersionDetails from './pages/ModelVersionDetails';
++import AuthCallback from './pages/AuthCallback';
++import { isAuthEnabled } from './config';
+ 
+-// TODO:
+-// As of [19/02/2025], this implementation should be updated once the following PR are merged.
+-// SEE:
+-// https://github.com/unitycatalog/unitycatalog/pull/809
+-const authEnabled = process.env.REACT_APP_GOOGLE_AUTH_ENABLED === 'true';
++const authEnabled = isAuthEnabled();
+ 
+ const router = createBrowserRouter([
++  {
++    path: '/auth/callback',
++    element: <AuthCallback />,
++  },
+   {
+     element: <AppProvider />,
+     children: [
+diff --git a/src/auth/oidc.ts b/src/auth/oidc.ts
+new file mode 100644
+index 0000000..33ba81c
+--- /dev/null
++++ b/src/auth/oidc.ts
+@@ -0,0 +1,23 @@
++import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
++import { getConfig } from '../config';
++
++let manager: UserManager | null = null;
++
++/** Lazily created OIDC client for the Keycloak (PKCE, public client) login. */
++export function getUserManager(): UserManager {
++  if (!manager) {
++    const cfg = getConfig();
++    manager = new UserManager({
++      authority: cfg.oidcIssuer,
++      client_id: cfg.oidcClientId,
++      redirect_uri: `${window.location.origin}/auth/callback`,
++      post_logout_redirect_uri: window.location.origin,
++      response_type: 'code',
++      scope: 'openid profile email',
++      loadUserInfo: false,
++      automaticSilentRenew: false,
++      userStore: new WebStorageStateStore({ store: window.sessionStorage }),
++    });
++  }
++  return manager;
++}
+diff --git a/src/components/login/KeycloakAuthButton.tsx b/src/components/login/KeycloakAuthButton.tsx
+index 0c8d465..a9c44a8 100644
+--- a/src/components/login/KeycloakAuthButton.tsx
++++ b/src/components/login/KeycloakAuthButton.tsx
+@@ -1,34 +1,14 @@
+ import { Avatar, Button } from 'antd';
+-// getting errors with node version in jwt-decode dependency, removed package for now
+-// import Keycloak from 'keycloak-js';
+-// import { useState } from 'react';
++import { getUserManager } from '../../auth/oidc';
+ 
+-export default function KeycloakAuthButton() {
+-  // const [keycloak, setKeycloak] = useState<Keycloak | null>(null);
+-
+-  // const initKeycloak = () => {
+-  //   const kc = new Keycloak({
+-  //     url: process.env.REACT_APP_KEYCLOAK_URL || '',
+-  //     realm: process.env.REACT_APP_KEYCLOAK_REALM_ID || '',
+-  //     clientId: process.env.REACT_APP_KEYCLOAK_CLIENT_ID || '',
+-  //   });
+-  //
+-  //   kc.init({ onLoad: 'check-sso' })
+-  //     .then((auth) => {
+-  //       setKeycloak(kc);
+-  //     })
+-  //     .catch((error) => {
+-  //       console.error('Failed to initialize Keycloak:', error);
+-  //     });
+-  // };
+-
+-  // const handleLogin = () => {
+-  //   if (keycloak) {
+-  //     keycloak.login();
+-  //   } else {
+-  //     initKeycloak();
+-  //   }
+-  // };
++export default function KeycloakAuthButton({ returnTo }: { returnTo: string }) {
++  const handleLogin = () => {
++    getUserManager()
++      .signinRedirect({ state: { returnTo } })
++      .catch((error) =>
++        console.error('Failed to start Keycloak login:', error),
++      );
++  };
+ 
+   return (
+     <Button
+@@ -41,7 +21,7 @@ export default function KeycloakAuthButton() {
+       }
+       iconPosition={'start'}
+       style={{ width: 240, height: 40, justifyContent: 'flex-start' }}
+-      // onClick={() => handleLogin()}
++      onClick={handleLogin}
+     >
+       Continue with Keycloak
+     </Button>
+diff --git a/src/config.ts b/src/config.ts
+new file mode 100644
+index 0000000..91784c0
+--- /dev/null
++++ b/src/config.ts
+@@ -0,0 +1,54 @@
++export type AuthProvider = 'none' | 'google' | 'okta' | 'keycloak';
++
++export interface UiConfig {
++  authProvider: AuthProvider;
++  oidcIssuer: string;
++  oidcClientId: string;
++  googleClientId: string;
++  oktaDomain: string;
++  oktaClientId: string;
++}
++
++declare global {
++  interface Window {
++    __UC_CONFIG__?: Partial<UiConfig>;
++  }
++}
++
++function envProvider(): AuthProvider {
++  if (process.env.REACT_APP_KEYCLOAK_AUTH_ENABLED === 'true') return 'keycloak';
++  if (process.env.REACT_APP_GOOGLE_AUTH_ENABLED === 'true') return 'google';
++  if (process.env.REACT_APP_OKTA_AUTH_ENABLED === 'true') return 'okta';
++  return 'none';
++}
++
++function envIssuer(): string {
++  const url = (process.env.REACT_APP_KEYCLOAK_URL || '').replace(/\/$/, '');
++  const realm = process.env.REACT_APP_KEYCLOAK_REALM_ID || '';
++  if (url && realm) return `${url}/realms/${realm}`;
++  return url;
++}
++
++/**
++ * Runtime configuration. Values injected at container start through
++ * window.__UC_CONFIG__ (see public/config.js) take precedence over the
++ * build-time REACT_APP_* variables, so one static build works everywhere.
++ */
++export function getConfig(): UiConfig {
++  const runtime = (typeof window !== 'undefined' && window.__UC_CONFIG__) || {};
++  return {
++    authProvider: runtime.authProvider || envProvider(),
++    oidcIssuer: runtime.oidcIssuer || envIssuer(),
++    oidcClientId:
++      runtime.oidcClientId || process.env.REACT_APP_KEYCLOAK_CLIENT_ID || '',
++    googleClientId:
++      runtime.googleClientId || process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
++    oktaDomain: runtime.oktaDomain || process.env.REACT_APP_OKTA_DOMAIN || '',
++    oktaClientId:
++      runtime.oktaClientId || process.env.REACT_APP_OKTA_CLIENT_ID || '',
++  };
++}
++
++export function isAuthEnabled(): boolean {
++  return getConfig().authProvider !== 'none';
++}
+diff --git a/src/context/auth-context.tsx b/src/context/auth-context.tsx
+index 8a82511..f51bdb0 100644
+--- a/src/context/auth-context.tsx
++++ b/src/context/auth-context.tsx
+@@ -7,6 +7,8 @@ import {
+ } from '../hooks/user';
+ import { GrantType, TokenType } from '../types/api/control.gen';
+ import { useNotification } from '../utils/NotificationContext';
++import { getConfig } from '../config';
++import { getUserManager } from '../auth/oidc';
+ 
+ interface AuthContextProps {
+   accessToken: any;
+@@ -31,30 +33,31 @@ function AuthProvider(props: any) {
+ 
+   const loginWithToken = useCallback(
+     async (idToken: string) => {
+-      return loginWithTokenMutation.mutate(
+-        {
++      try {
++        await loginWithTokenMutation.mutateAsync({
+           grant_type: GrantType.TOKEN_EXCHANGE,
+           requested_token_type: TokenType.ACCESS_TOKEN,
+           subject_token_type: TokenType.ID_TOKEN,
+           subject_token: idToken,
+-        },
+-        {
+-          onSuccess: () => {
+-            refetch();
+-          },
+-          onError: () => {
+-            setNotification(
+-              'Login failed. Please contact your system administrator.',
+-              'error',
+-            );
+-          },
+-        },
+-      );
++        });
++        await refetch();
++      } catch (error) {
++        setNotification(
++          'Login failed. Please contact your system administrator.',
++          'error',
++        );
++        throw error;
++      }
+     },
+     [loginWithTokenMutation, setNotification, refetch],
+   );
+ 
+   const logout = useCallback(async () => {
++    if (getConfig().authProvider === 'keycloak') {
++      await getUserManager()
++        .removeUser()
++        .catch(() => undefined);
++    }
+     return logoutUser.mutate(
+       {},
+       {
+diff --git a/src/pages/AuthCallback.tsx b/src/pages/AuthCallback.tsx
+new file mode 100644
+index 0000000..76243d9
+--- /dev/null
++++ b/src/pages/AuthCallback.tsx
+@@ -0,0 +1,40 @@
++import { useEffect, useRef } from 'react';
++import { Typography } from 'antd';
++import { useNavigate } from 'react-router-dom';
++import { getUserManager } from '../auth/oidc';
++import { useAuth } from '../context/auth-context';
++
++/**
++ * OIDC redirect target. Completes the PKCE code exchange in the browser, then
++ * exchanges the resulting ID token for a Unity Catalog token (UC_TOKEN cookie).
++ */
++export default function AuthCallback() {
++  const { loginWithToken } = useAuth();
++  const navigate = useNavigate();
++  const started = useRef(false);
++
++  useEffect(() => {
++    if (started.current) return;
++    started.current = true;
++    getUserManager()
++      .signinRedirectCallback()
++      .then(async (user) => {
++        const state = user.state as { returnTo?: string } | undefined;
++        if (!user.id_token) {
++          throw new Error('Identity provider returned no ID token');
++        }
++        await loginWithToken(user.id_token);
++        navigate(state?.returnTo || '/', { replace: true });
++      })
++      .catch((error) => {
++        console.error('Keycloak login failed:', error);
++        navigate('/', { replace: true });
++      });
++  }, [loginWithToken, navigate]);
++
++  return (
++    <Typography.Text style={{ padding: 24, display: 'block' }}>
++      Signing in...
++    </Typography.Text>
++  );
++}
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index 46b447c..ed5050a 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -4,6 +4,7 @@ import GoogleAuthButton from '../components/login/GoogleAuthButton';
+ import OktaAuthButton from '../components/login/OktaAuthButton';
+ import { useAuth } from '../context/auth-context';
+ import KeycloakAuthButton from '../components/login/KeycloakAuthButton';
++import { getConfig } from '../config';
+ import { useNavigate, useLocation } from 'react-router-dom';
+ 
+ export default function LoginPage() {
+@@ -11,13 +12,15 @@ export default function LoginPage() {
+   const navigate = useNavigate();
+   const location = useLocation();
+   const from = location.state?.from || '/';
+-  const googleEnabled = process.env.REACT_APP_GOOGLE_AUTH_ENABLED === 'true';
+-  const oktaEnabled = process.env.REACT_APP_OKTA_AUTH_ENABLED === 'true';
+-  const keycloakEnabled =
+-    process.env.REACT_APP_KEYCLOAK_AUTH_ENABLED === 'true';
++  const { authProvider } = getConfig();
++  const googleEnabled = authProvider === 'google';
++  const oktaEnabled = authProvider === 'okta';
++  const keycloakEnabled = authProvider === 'keycloak';
+ 
+   const handleGoogleSignIn = async (idToken: string) => {
+-    await loginWithToken(idToken).then(() => navigate(from, { replace: true }));
++    await loginWithToken(idToken)
++      .then(() => navigate(from, { replace: true }))
++      .catch(() => undefined);
+   };
+ 
+   return (
+@@ -70,7 +73,7 @@ export default function LoginPage() {
+                 onError={(error: Error) => console.log('error', error)}
+               />
+             )}
+-            {keycloakEnabled && <KeycloakAuthButton />}
++            {keycloakEnabled && <KeycloakAuthButton returnTo={from} />}
+             {!googleEnabled && !oktaEnabled && !keycloakEnabled && (
+               <Typography>Auth providers have not been enabled</Typography>
+             )}

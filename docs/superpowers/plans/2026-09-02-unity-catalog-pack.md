@@ -2831,7 +2831,7 @@ Architecture: the ASCII diagram from the spec, component table, login flow. Trou
 
 - [ ] **Step 6: Final checks and commit**
 
-Run: `helm lint chart/ && .venv/bin/pytest tests/chart images/sync -q && grep -rn "—" --include=*.md --include=*.yaml --include=*.py --include=*.ts --include=*.tsx . | grep -v node_modules | grep -v .venv || echo "no em dashes"`
+Run: `helm lint chart/ && .venv/bin/pytest tests/chart images/sync -q && grep -rn -- "$(printf "\xe2\x80\x94")" . --exclude-dir=.venv --exclude-dir=.git --exclude-dir=charts || echo "no em dashes"`
 Expected: all pass, "no em dashes".
 
 `git add README.md docs && git commit -m "Add pack documentation"`
