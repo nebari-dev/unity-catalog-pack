@@ -1,0 +1,15 @@
+# Schema: https://github.com/nebari-dev/software-pack-dashboard/blob/main/schema/pack-metadata.schema.json
+name: unity-catalog-pack
+display_name: Unity Catalog Pack
+level: experimental
+owner: tylerpotts
+deprecated: false
+product_owner: null
+nebariapp_integration: full
+scope:
+  standalone-supported: yes
+demo_notes: |
+  Requires CloudNativePG (shipped by NIC) for the Nebari profile and a one-time
+  Keycloak service-account client for the group sync job. See docs/.
+links:
+  docs: https://github.com/nebari-dev/unity-catalog-pack/blob/main/README.md
