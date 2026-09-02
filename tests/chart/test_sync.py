@@ -15,7 +15,7 @@ def test_cronjob_schedule_and_policy():
     cj, c = _container(render(SYNC))
     assert cj["spec"]["schedule"] == "*/15 * * * *"
     assert cj["spec"]["concurrencyPolicy"] == "Forbid"
-    assert c["image"] == "quay.io/nebari/unity-catalog-keycloak-sync:latest"
+    assert c["image"] == "quay.io/nebari/unity-catalog-pack-unity-catalog-keycloak-sync:latest"
 
 
 def test_cronjob_env_and_mounts():

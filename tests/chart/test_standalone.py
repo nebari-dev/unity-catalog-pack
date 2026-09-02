@@ -30,4 +30,4 @@ def test_server_image_is_pinned_release(standalone_docs):
 def test_ui_image_is_first_party(standalone_docs):
     dep = find(standalone_docs, "Deployment", "unity-catalog-ui")
     ui = dep["spec"]["template"]["spec"]["containers"][0]
-    assert ui["image"].startswith("quay.io/nebari/unity-catalog-ui:")
+    assert ui["image"].startswith("quay.io/nebari/unity-catalog-pack-unity-catalog-ui:")

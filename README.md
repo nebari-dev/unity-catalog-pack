@@ -15,7 +15,7 @@ Unity Catalog v0.6.0, with four small patches) and adds:
   not enforce login (`enforceAtGateway: false`) and grants plus credential vending
   gate every API call.
 - **Keycloak login in the UI.** The pack builds its own UI image
-  (`quay.io/nebari/unity-catalog-ui`) that adds a PKCE login against the
+  (`quay.io/nebari/unity-catalog-pack-unity-catalog-ui`) that adds a PKCE login against the
   operator-provisioned SPA client, then exchanges the ID token for a Unity
   Catalog token. nginx serves the build and proxies `/api/` to the server, so one
   Service and one hostname carry both.

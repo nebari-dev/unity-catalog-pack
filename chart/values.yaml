@@ -62,7 +62,7 @@ database:
 sync:
   enabled: false
   image:
-    repository: quay.io/nebari/unity-catalog-keycloak-sync
+    repository: quay.io/nebari/unity-catalog-pack-unity-catalog-keycloak-sync
     tag: latest
     pullPolicy: IfNotPresent
   schedule: "*/15 * * * *"
@@ -127,7 +127,7 @@ unitycatalog:
     deployment:
       useImageEntrypoint: true
       image:
-        repository: quay.io/nebari/unity-catalog-ui
+        repository: quay.io/nebari/unity-catalog-pack-unity-catalog-ui
         tag: latest
         pullPolicy: IfNotPresent
   ingress:
