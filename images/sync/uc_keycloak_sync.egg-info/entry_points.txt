@@ -1,0 +1,2 @@
+[console_scripts]
+uc-keycloak-sync = uc_keycloak_sync.main:main

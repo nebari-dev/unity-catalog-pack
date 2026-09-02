@@ -1,0 +1,6 @@
+requests<3,>=2.32
+PyJWT[crypto]<3,>=2.9
+
+[test]
+pytest>=8
+responses>=0.25

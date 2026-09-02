@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: uc-keycloak-sync
+Version: 0.1.0
+Summary: Mirror Keycloak group members into Unity Catalog users and metastore privileges
+Requires-Python: >=3.12
+Requires-Dist: requests<3,>=2.32
+Requires-Dist: PyJWT[crypto]<3,>=2.9
+Provides-Extra: test
+Requires-Dist: pytest>=8; extra == "test"
+Requires-Dist: responses>=0.25; extra == "test"
