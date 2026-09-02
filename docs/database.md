@@ -43,6 +43,32 @@ What happens:
 Requirements: `kubectl get crd clusters.postgresql.cnpg.io` must exist. On kind,
 `make -C dev up-nebari` installs the operator.
 
+### Longhorn-backed clusters: check replica headroom first
+
+On clusters where the default StorageClass is Longhorn (NIC on Hetzner and
+k3s), a CNPG volume needs its replicas scheduled on separate nodes. Longhorn
+schedules against `(disk size - reserved) * over-provisioning percentage`, and
+when that budget is used up the PVC still binds but the volume stays `faulted`
+and every attach fails with "volume ... is not ready for workloads". It looks
+like an attach bug; it is a capacity policy.
+
+Check before installing:
+
+```bash
+kubectl -n longhorn-system get nodes.longhorn.io -o json | python3 -c '
+import sys, json
+for n in json.load(sys.stdin)["items"]:
+    for k, d in n["spec"]["disks"].items():
+        st = n["status"]["diskStatus"][k]
+        mx, res, sch = int(st["storageMaximum"]), int(d["storageReserved"]), int(st["storageScheduled"])
+        print(n["metadata"]["name"], f"headroom={(mx-res-sch)/2**30:.1f}Gi at 100% over-provisioning")'
+```
+
+Fixes, in order of preference: point `database.cnpg.storage.storageClass` at a
+non-Longhorn class (for example `hcloud-volumes` on Hetzner, minimum 10Gi),
+delete unused volumes, or raise the Longhorn setting
+`storage-over-provisioning-percentage`.
+
 ## Bring your own PostgreSQL
 
 Disable CNPG and point at an existing server:

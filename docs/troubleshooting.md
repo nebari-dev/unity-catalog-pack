@@ -42,6 +42,15 @@ kubectl -n unity-catalog describe nebariapp unity-catalog
 operator is installed by NIC; on kind use `make -C dev _cnpg`). Then
 `kubectl -n unity-catalog describe cluster unity-catalog-db`.
 
+## CNPG initdb pod stuck in Init with FailedAttachVolume
+
+Events show `volume pvc-... is not ready for workloads` while the PVC is Bound.
+Longhorn could not schedule the replicas (`kubectl -n longhorn-system get
+volumes.longhorn.io <pv> -o yaml` shows `Scheduled=False
+ReplicaSchedulingFailure: insufficient storage`). See the Longhorn section in
+docs/database.md. After freeing capacity, delete the CNPG `Cluster` (it holds no
+data yet) and let ArgoCD or Helm recreate it.
+
 ## Server CrashLoopBackOff with a Postgres error
 
 Look at the init and server logs:
