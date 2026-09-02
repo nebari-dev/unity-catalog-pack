@@ -1,0 +1,11 @@
+{{- if .Values.sync.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nebari-unity-catalog.ucFullname" . }}-keycloak-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nebari-unity-catalog.labels" . | nindent 4 }}
+data:
+  config.json: {{ dict "groups" .Values.sync.groups "deactivate_removed" .Values.sync.deactivateRemoved "dry_run" .Values.sync.dryRun | toJson | quote }}
+{{- end }}

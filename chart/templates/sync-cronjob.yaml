@@ -1,0 +1,91 @@
+{{- if .Values.sync.enabled }}
+{{- if not .Values.sync.keycloak.existingSecret }}
+{{- fail "sync.keycloak.existingSecret is required when sync.enabled is true (Secret with keys client-id and client-secret)" }}
+{{- end }}
+{{- if not .Values.sync.groups }}
+{{- fail "sync.groups must list at least one group when sync.enabled is true" }}
+{{- end }}
+{{- $name := printf "%s-keycloak-sync" (include "nebari-unity-catalog.ucFullname" .) }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nebari-unity-catalog.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.sync.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: {{ .Values.sync.ttlSecondsAfterFinished }}
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            {{- include "nebari-unity-catalog.labels" . | nindent 12 }}
+            app.kubernetes.io/component: keycloak-sync
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sync
+              image: "{{ .Values.sync.image.repository }}:{{ .Values.sync.image.tag }}"
+              imagePullPolicy: {{ .Values.sync.image.pullPolicy }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: UC_SERVER_URL
+                  value: {{ include "nebari-unity-catalog.serverUrl" . | quote }}
+                - name: UC_JWT_KEY_DIR
+                  value: /etc/uc-jwt
+                - name: SYNC_CONFIG_PATH
+                  value: /etc/uc-sync/config.json
+                - name: KEYCLOAK_ISSUER_URL
+                  {{- if .Values.sync.keycloak.issuerUrl }}
+                  value: {{ .Values.sync.keycloak.issuerUrl | quote }}
+                  {{- else }}
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.sync.oidcSecretName }}
+                      key: issuer-url
+                  {{- end }}
+                - name: KEYCLOAK_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.sync.keycloak.existingSecret }}
+                      key: client-id
+                - name: KEYCLOAK_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.sync.keycloak.existingSecret }}
+                      key: client-secret
+              {{- with .Values.sync.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              volumeMounts:
+                - name: jwt-key
+                  mountPath: /etc/uc-jwt
+                  readOnly: true
+                - name: config
+                  mountPath: /etc/uc-sync
+                  readOnly: true
+          volumes:
+            - name: jwt-key
+              secret:
+                secretName: {{ include "nebari-unity-catalog.jwtSecretName" . }}
+            - name: config
+              configMap:
+                name: {{ $name }}
+{{- end }}
