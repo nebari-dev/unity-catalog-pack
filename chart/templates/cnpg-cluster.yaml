@@ -1,0 +1,37 @@
+{{- if .Values.database.cnpg.enabled }}
+{{- if ne .Values.unitycatalog.server.db.type "postgresql" }}
+{{- fail "unitycatalog.server.db.type must be postgresql when database.cnpg.enabled is true" }}
+{{- end }}
+{{- $c := .Values.database.cnpg }}
+# PostgreSQL for Unity Catalog, managed by the CloudNativePG operator (installed
+# by NIC as foundational software). initdb creates the database and owner and
+# CNPG publishes credentials in Secret "<clusterName>-app" (keys: username,
+# password, dbname, host, port, uri). The server reads host <clusterName>-rw.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $c.clusterName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "nebari-unity-catalog.labels" . | nindent 4 }}
+  {{- with $c.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  instances: {{ $c.instances }}
+  imageName: {{ $c.imageName }}
+  {{- with $c.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  storage:
+    size: {{ $c.storage.size }}
+    {{- with $c.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ $c.database }}
+      owner: {{ $c.owner }}
+{{- end }}
