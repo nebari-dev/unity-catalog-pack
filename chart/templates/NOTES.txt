@@ -1,0 +1,25 @@
+Unity Catalog ({{ .Chart.AppVersion }}) has been deployed as release {{ .Release.Name }}.
+{{- if .Values.nebariapp.enabled }}
+
+NebariApp is ENABLED. The nebari-operator will configure:
+  - HTTPRoute and TLS for https://{{ .Values.nebariapp.hostname }}
+  {{- if .Values.nebariapp.auth.enabled }}
+  - Keycloak clients (confidential + SPA) stored in Secret {{ include "nebari-unity-catalog.ucFullname" . }}-oidc-client
+  {{- end }}
+
+Check status:
+  kubectl get nebariapp {{ include "nebari-unity-catalog.ucFullname" . }} -n {{ .Release.Namespace }}
+{{- else }}
+
+NebariApp is DISABLED. Access the UI locally:
+  kubectl port-forward svc/{{ include "nebari-unity-catalog.uiServiceName" . }} 3000:{{ .Values.nebariapp.service.port }} -n {{ .Release.Namespace }}
+  open http://localhost:3000
+The API is proxied at http://localhost:3000/api/2.1/unity-catalog/
+{{- end }}
+{{- if .Values.sync.enabled }}
+
+Keycloak group sync runs on schedule "{{ .Values.sync.schedule }}":
+  kubectl get cronjob {{ include "nebari-unity-catalog.ucFullname" . }}-keycloak-sync -n {{ .Release.Namespace }}
+Trigger once now:
+  kubectl create job --from=cronjob/{{ include "nebari-unity-catalog.ucFullname" . }}-keycloak-sync sync-now -n {{ .Release.Namespace }}
+{{- end }}

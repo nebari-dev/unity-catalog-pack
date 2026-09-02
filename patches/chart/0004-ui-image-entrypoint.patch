@@ -1,0 +1,42 @@
+diff --color -ruN b3/templates/ui/deployment.yaml b4/templates/ui/deployment.yaml
+--- a/templates/ui/deployment.yaml	2026-09-02 15:43:52
++++ b/templates/ui/deployment.yaml	2026-09-02 15:43:52
+@@ -96,6 +96,7 @@
+           {{- end }}
+           {{- end }}
+ 
++          {{- if not .Values.ui.deployment.useImageEntrypoint }}
+           command:
+             - /bin/bash
+             - -c
+@@ -109,7 +110,12 @@
+               {{- end }}
+               mv temp.json package.json
+               yarn start
++          {{- end }}
+           env:
++            - name: UC_SERVER_URL
++              value: {{ tpl .Values.ui.serverUrl . | quote }}
++            - name: UI_PORT
++              value: {{ .Values.ui.deployment.port | quote }}
+           {{- if .Values.auth.enabled }}
+             - name: REACT_APP_GOOGLE_AUTH_ENABLED
+               value: "{{ eq .Values.auth.provider "google" }}"
+diff --color -ruN b3/values.yaml b4/values.yaml
+--- a/values.yaml	2026-09-02 15:43:52
++++ b/values.yaml	2026-09-02 15:43:52
+@@ -664,6 +664,14 @@
+     # -- (int) Replica count for the UI deployment
+     replicaCount: 1
+ 
++    # -- (bool) Run the image entrypoint instead of the upstream dev-server command
++    # @raw
++    #
++    # Set to true for production UI images (e.g. an nginx build). The container
++    # always receives `UC_SERVER_URL` and `UI_PORT` environment variables.
++    #
++    useImageEntrypoint: false
++
+     initContainer:
+       image:
+         # -- (string) Repository for the UI init container

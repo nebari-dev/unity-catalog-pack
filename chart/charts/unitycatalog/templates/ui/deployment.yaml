@@ -96,6 +96,7 @@ spec:
           {{- end }}
           {{- end }}
 
+          {{- if not .Values.ui.deployment.useImageEntrypoint }}
           command:
             - /bin/bash
             - -c
@@ -109,7 +110,12 @@ spec:
               {{- end }}
               mv temp.json package.json
               yarn start
+          {{- end }}
           env:
+            - name: UC_SERVER_URL
+              value: {{ tpl .Values.ui.serverUrl . | quote }}
+            - name: UI_PORT
+              value: {{ .Values.ui.deployment.port | quote }}
           {{- if .Values.auth.enabled }}
             - name: REACT_APP_GOOGLE_AUTH_ENABLED
               value: "{{ eq .Values.auth.provider "google" }}"
@@ -117,7 +123,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.clientSecretName | quote }}
-                  key: clientId
+                  key: {{ .Values.auth.clientSecretKeys.clientId | quote }}
             - name: REACT_APP_OKTA_AUTH_ENABLED
               value: "{{ eq .Values.auth.provider "okta" }}"
             - name: REACT_APP_OKTA_DOMAIN
@@ -126,18 +132,21 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.clientSecretName | quote }}
-                  key: clientId
+                  key: {{ .Values.auth.clientSecretKeys.clientId | quote }}
             - name: REACT_APP_KEYCLOAK_AUTH_ENABLED
               value: "{{ eq .Values.auth.provider "keycloak" }}"
             - name: REACT_APP_KEYCLOAK_URL
-              value: "{{ .Values.auth.authorizationUrl }}"
+              value: {{ .Values.auth.keycloakUrl | default .Values.auth.authorizationUrl | quote }}
             - name: REACT_APP_KEYCLOAK_REALM_ID
               value: "{{ .Values.auth.keycloakRealmId }}"
             - name: REACT_APP_KEYCLOAK_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.clientSecretName | quote }}
-                  key: clientId
+                  key: {{ .Values.auth.spaClientIdKey | quote }}
+          {{- end }}
+          {{- with .Values.ui.deployment.extraEnv }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
           {{- with .Values.ui.deployment.resources }}
           resources: {{- toYaml . | nindent 12 }}

@@ -118,6 +118,32 @@ auth:
   #
   clientSecretName:
 
+  # -- (object) Keys inside `clientSecretName` that hold the client ID and secret
+  # @raw
+  #
+  # Defaults match the upstream convention. Set to `client-id` / `client-secret`
+  # when the Secret is produced by the nebari-operator.
+  #
+  clientSecretKeys:
+    clientId: clientId
+    clientSecret: clientSecret
+
+  # -- (string) Key inside `clientSecretName` that holds the public (SPA) client ID used by the UI
+  # @default -- clientId
+  spaClientIdKey: clientId
+
+  # -- (string) Keycloak base URL for the UI (REACT_APP_KEYCLOAK_URL)
+  # @default -- not set
+  keycloakUrl:
+
+  # -- (string) Keycloak realm for the UI (REACT_APP_KEYCLOAK_REALM_ID)
+  # @default -- not set
+  keycloakRealmId:
+
+  # -- (string) Okta domain for the UI (REACT_APP_OKTA_DOMAIN)
+  # @default -- not set
+  oktaDomain:
+
   # -- (string) Comma-separated list of allowed token issuers
   # @default -- https://accounts.google.com
   # @raw
@@ -360,6 +386,15 @@ server:
       # [Kubernetes docs](https://kubernetes.io/docs/concepts/policy/security-context/)
       #
       securityContext:
+
+      # -- (array) Extra environment variables for the config-rendering init container
+      # @default -- not set
+      # @raw
+      #
+      # Values in server.properties are rendered with envsubst, so `${VAR}`
+      # placeholders in config values resolve against these variables.
+      #
+      extraEnv:
 
     image:
       # -- (string) Repository for the server image
@@ -629,6 +664,14 @@ ui:
     # -- (int) Replica count for the UI deployment
     replicaCount: 1
 
+    # -- (bool) Run the image entrypoint instead of the upstream dev-server command
+    # @raw
+    #
+    # Set to true for production UI images (e.g. an nginx build). The container
+    # always receives `UC_SERVER_URL` and `UI_PORT` environment variables.
+    #
+    useImageEntrypoint: false
+
     initContainer:
       image:
         # -- (string) Repository for the UI init container
@@ -711,6 +754,10 @@ ui:
     # [Kubernetes docs](https://kubernetes.io/docs/concepts/policy/security-context/)
     #
     securityContext:
+
+    # -- (array) Extra environment variables for the UI container
+    # @default -- not set
+    extraEnv:
 
     # -- (object) Resources for the UI deployment
     # @default -- not set

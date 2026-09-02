@@ -1,0 +1,16 @@
+apiVersion: v2
+name: nebari-unity-catalog
+description: A Nebari Software Pack for Unity Catalog OSS
+type: application
+version: 0.1.0
+appVersion: "0.6.0"
+home: https://github.com/nebari-dev/unity-catalog-pack
+sources:
+  - https://github.com/nebari-dev/unity-catalog-pack
+  - https://github.com/unitycatalog/unitycatalog
+keywords: [unity-catalog, data-catalog, nebari]
+dependencies:
+  # Vendored (unpacked) in charts/unitycatalog by scripts/vendor-upstream.sh.
+  # No repository: Helm resolves it from the charts/ directory.
+  - name: unitycatalog
+    version: "0.6.0"

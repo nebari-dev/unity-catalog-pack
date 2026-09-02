@@ -1,0 +1,56 @@
+diff --color -ruN b2/templates/server/deployment.yaml b3/templates/server/deployment.yaml
+--- a/templates/server/deployment.yaml	2026-09-02 15:43:52
++++ b/templates/server/deployment.yaml	2026-09-02 15:43:52
+@@ -157,6 +157,9 @@
+                   name: {{ .Values.auth.clientSecretName | quote }}
+                   key: {{ .Values.auth.clientSecretKeys.clientSecret | quote }}
+           {{- end }}
++          {{- with .Values.server.deployment.initContainer.extraEnv }}
++            {{- toYaml . | nindent 12 }}
++          {{- end }}
+       {{- with .Values.server.deployment.extraInitContainers }}
+         {{- toYaml . | nindent 8 }}
+       {{- end }}
+diff --color -ruN b2/templates/ui/deployment.yaml b3/templates/ui/deployment.yaml
+--- a/templates/ui/deployment.yaml	2026-09-02 15:43:52
++++ b/templates/ui/deployment.yaml	2026-09-02 15:43:52
+@@ -139,6 +139,9 @@
+                   name: {{ .Values.auth.clientSecretName | quote }}
+                   key: {{ .Values.auth.spaClientIdKey | quote }}
+           {{- end }}
++          {{- with .Values.ui.deployment.extraEnv }}
++            {{- toYaml . | nindent 12 }}
++          {{- end }}
+           {{- with .Values.ui.deployment.resources }}
+           resources: {{- toYaml . | nindent 12 }}
+           {{- end }}
+diff --color -ruN b2/values.yaml b3/values.yaml
+--- a/values.yaml	2026-09-02 15:43:52
++++ b/values.yaml	2026-09-02 15:43:52
+@@ -387,6 +387,15 @@
+       #
+       securityContext:
+ 
++      # -- (array) Extra environment variables for the config-rendering init container
++      # @default -- not set
++      # @raw
++      #
++      # Values in server.properties are rendered with envsubst, so `${VAR}`
++      # placeholders in config values resolve against these variables.
++      #
++      extraEnv:
++
+     image:
+       # -- (string) Repository for the server image
+       repository: unitycatalog/unitycatalog
+@@ -737,6 +746,10 @@
+     # [Kubernetes docs](https://kubernetes.io/docs/concepts/policy/security-context/)
+     #
+     securityContext:
++
++    # -- (array) Extra environment variables for the UI container
++    # @default -- not set
++    extraEnv:
+ 
+     # -- (object) Resources for the UI deployment
+     # @default -- not set

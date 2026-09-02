@@ -1,0 +1,136 @@
+# Default values for nebari-unity-catalog.
+# Everything under `unitycatalog:` is passed to the vendored upstream subchart
+# (chart/charts/unitycatalog). Everything else is wrapper-level.
+
+# =============================================================================
+# Nebari integration (NebariApp CRD)
+# =============================================================================
+nebariapp:
+  enabled: false
+  # hostname: uc.nebari.example.com   # required when enabled
+  service:
+    name: ""      # defaults to <unitycatalog.fullnameOverride>-ui
+    port: 3000
+  routing:
+    tls:
+      enabled: true
+    routes:
+      - pathPrefix: /
+        pathType: PathPrefix
+  auth:
+    enabled: false
+    provider: keycloak
+    provisionClient: true
+    # Unity Catalog performs its own authentication, so the gateway must not.
+    enforceAtGateway: false
+    spaClient:
+      enabled: true
+    scopes:
+      - openid
+      - profile
+      - email
+  landingPage: {}
+  gateway: public
+
+# =============================================================================
+# Metadata database via CloudNativePG (operator must be installed; NIC ships it)
+# =============================================================================
+database:
+  cnpg:
+    enabled: false
+    clusterName: unity-catalog-db
+    instances: 1
+    imageName: ghcr.io/cloudnative-pg/postgresql:18.4-system-trixie
+    database: unitycatalog
+    owner: unitycatalog
+    storage:
+      size: 5Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    annotations:
+      argocd.argoproj.io/sync-wave: "-1"
+
+# =============================================================================
+# Keycloak group sync CronJob
+# =============================================================================
+sync:
+  enabled: false
+  image:
+    repository: quay.io/nebari/unity-catalog-keycloak-sync
+    tag: latest
+    pullPolicy: IfNotPresent
+  schedule: "*/15 * * * *"
+  keycloak:
+    # Realm issuer URL, e.g. https://keycloak.example.com/realms/nebari.
+    # Leave empty to read key `issuer-url` from `sync.oidcSecretName`.
+    issuerUrl: ""
+    # Secret with keys `client-id` and `client-secret` for a confidential
+    # client that has service accounts enabled and realm-management roles
+    # view-users and query-groups. See docs/keycloak-service-account.md.
+    existingSecret: ""
+  oidcSecretName: unity-catalog-oidc-client
+  # groups:
+  #   - name: uc-admins
+  #     privileges: ["CREATE CATALOG"]
+  #   - name: uc-users
+  #     privileges: []
+  groups: []
+  deactivateRemoved: true
+  dryRun: false
+  serverUrl: ""              # defaults to http://<fullname>-server:8080
+  jwtKeypairSecretName: ""   # defaults to unitycatalog.server.jwtKeypairSecret.name
+  ttlSecondsAfterFinished: 600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# =============================================================================
+# Upstream subchart values (see chart/charts/unitycatalog/values.yaml for the full list)
+# =============================================================================
+unitycatalog:
+  fullnameOverride: unity-catalog
+  auth:
+    enabled: false
+  storage:
+    modelStorageRoot: file:/tmp/ucroot
+  server:
+    jwtKeypairSecret:
+      name: unity-catalog-jwt-keypair
+      create: true
+    db:
+      type: file
+      fileConfig:
+        persistence:
+          enabled: true
+          size: 1Gi
+      # Pre-wired to the CNPG names above; switch type to postgresql to use them.
+      postgresqlConfig:
+        host: unity-catalog-db-rw
+        port: 5432
+        dbName: unitycatalog
+        username: unitycatalog
+        passwordSecretName: unity-catalog-db-app
+        passwordSecretKey: password
+    deployment:
+      enableReadinessProbe: true
+  ui:
+    deployment:
+      useImageEntrypoint: true
+      image:
+        repository: quay.io/nebari/unity-catalog-ui
+        tag: latest
+        pullPolicy: IfNotPresent
+  ingress:
+    enabled: false
+  httpRoute:
+    enabled: false

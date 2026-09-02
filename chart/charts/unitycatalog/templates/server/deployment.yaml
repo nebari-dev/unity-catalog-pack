@@ -150,12 +150,15 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.clientSecretName | quote }}
-                  key: clientId
+                  key: {{ .Values.auth.clientSecretKeys.clientId | quote }}
             - name: OAUTH_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.auth.clientSecretName | quote }}
-                  key: clientSecret
+                  key: {{ .Values.auth.clientSecretKeys.clientSecret | quote }}
+          {{- end }}
+          {{- with .Values.server.deployment.initContainer.extraEnv }}
+            {{- toYaml . | nindent 12 }}
           {{- end }}
       {{- with .Values.server.deployment.extraInitContainers }}
         {{- toYaml . | nindent 8 }}
