@@ -1,0 +1,39 @@
+name: Build Docker Images
+
+# Builds and publishes the pack's first-party images via the shared reusable
+# workflow in nebari-dev/.github (GHCR + quay.io, tags sha-<short> and latest).
+# chart/Chart.yaml is in the trigger so the release commit produces images
+# tagged with its sha (release.yaml pins image tags to that sha).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "images/**"
+      - ".github/workflows/build-images.yaml"
+      - "chart/Chart.yaml"
+  pull_request:
+    paths:
+      - "images/**"
+  workflow_dispatch:
+
+jobs:
+  ui:
+    uses: nebari-dev/.github/.github/workflows/pack-build-image.yaml@v1
+    with:
+      image: unity-catalog-ui
+      context: images/ui
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+      QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+
+  keycloak-sync:
+    uses: nebari-dev/.github/.github/workflows/pack-build-image.yaml@v1
+    with:
+      image: unity-catalog-keycloak-sync
+      context: images/sync
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+      QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}

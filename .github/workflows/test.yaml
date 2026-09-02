@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  standalone-kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v5
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: uc-test
+      - name: Build UI image
+        run: docker build -t unity-catalog-ui:ci images/ui
+      - name: Load UI image into kind
+        run: kind load docker-image unity-catalog-ui:ci --name uc-test
+      - name: Install standalone
+        run: |
+          helm upgrade --install unity-catalog chart/ -n unity-catalog --create-namespace \
+            -f examples/standalone-values.yaml \
+            --set unitycatalog.ui.deployment.image.repository=unity-catalog-ui \
+            --set unitycatalog.ui.deployment.image.tag=ci \
+            --set unitycatalog.ui.deployment.image.pullPolicy=Never \
+            --wait --timeout 8m
+      - name: Smoke test through the UI proxy
+        run: |
+          kubectl -n unity-catalog port-forward svc/unity-catalog-ui 3000:3000 &
+          sleep 5
+          curl -fsS localhost:3000/ > /dev/null
+          curl -fsS localhost:3000/config.js
+          curl -fsS localhost:3000/api/2.1/unity-catalog/catalogs | tee /dev/stderr | grep -q catalogs
+      - name: Debug on failure
+        if: failure()
+        run: |
+          kubectl -n unity-catalog get all
+          kubectl -n unity-catalog describe pods
+          kubectl -n unity-catalog logs -l app.kubernetes.io/component=server --all-containers --tail=200 || true
+          kubectl -n unity-catalog logs -l app.kubernetes.io/component=ui --all-containers --tail=100 || true

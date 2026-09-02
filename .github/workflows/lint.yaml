@@ -1,0 +1,42 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz | \
+            sudo tar -xz -C /usr/local/bin kubeconform
+      - run: helm lint chart/
+      - run: helm lint chart/ -f examples/nebari-values.yaml
+      - name: Validate rendered manifests (standalone)
+        run: helm template unity-catalog chart/ -f examples/standalone-values.yaml | kubeconform -strict -ignore-missing-schemas
+      - name: Validate rendered manifests (nebari)
+        run: helm template unity-catalog chart/ -f examples/nebari-values.yaml | kubeconform -strict -ignore-missing-schemas
+      - name: Vendored chart matches upstream tag plus patches
+        run: |
+          scripts/vendor-upstream.sh
+          git diff --exit-code -- chart/charts UPSTREAM_VERSION
+      - run: pip install -r tests/requirements.txt
+      - run: pytest tests/chart -q
+
+  sync-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "images/sync[test]"
+      - run: pytest images/sync -q

@@ -1,0 +1,23 @@
+name: Release Chart
+
+# On a chart/Chart.yaml version bump: pins first-party image tags to the release
+# commit sha, packages the chart, creates a GitHub Release and opens a PR in
+# nebari-dev/helm-repository. Requires the org-provided NEBARI_HELM_REPO_TOKEN.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "chart/Chart.yaml"
+
+jobs:
+  release:
+    uses: nebari-dev/.github/.github/workflows/pack-release.yaml@v1
+    with:
+      chart-path: chart
+      chart-name: nebari-unity-catalog
+      tag-paths: |
+        unitycatalog.ui.deployment.image.tag
+        sync.image.tag
+    secrets:
+      NEBARI_HELM_REPO_TOKEN: ${{ secrets.NEBARI_HELM_REPO_TOKEN }}
